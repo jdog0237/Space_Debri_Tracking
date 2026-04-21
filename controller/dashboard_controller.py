@@ -27,6 +27,18 @@ class DashboardController(AbstractController, ModelListener):
     def handle_load_catalog(self, path: str) -> None:
         try:
             self._debris_model.load_catalog_from_csv(path)
+            self._dashboard_view.display_catalog_count(
+                self._debris_model.get_catalog().get_object_count()
+            )
+        except (CatalogValidationException, InvalidInputException) as exc:
+            self._dashboard_view.display_error(str(exc))
+
+    def handle_generate_synthetic_catalog(self, count: int) -> None:
+        try:
+            self._debris_model.generate_synthetic_catalog(count)
+            self._dashboard_view.display_catalog_count(
+                self._debris_model.get_catalog().get_object_count()
+            )
         except (CatalogValidationException, InvalidInputException) as exc:
             self._dashboard_view.display_error(str(exc))
 

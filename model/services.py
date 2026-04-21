@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import math
 import random
 from pathlib import Path
 
@@ -32,14 +33,79 @@ class DebrisCatalogLoader:
         try:
             with file_path.open("r", encoding="utf-8", newline="") as handle:
                 reader = csv.DictReader(handle)
-                for row in reader:
-                    debris_id = str(row["id"])
-                    position = Vector3(float(row["x"]), float(row["y"]), float(row["z"]))
-                    velocity = Vector3(
-                        float(row["vx"]), float(row["vy"]), float(row["vz"])
+                fieldnames = reader.fieldnames
+                if not fieldnames:
+                    raise CatalogValidationException("CSV is missing a header row.")
+
+                normalized_to_actual: dict[str, str] = {
+                    name.strip().lower(): name for name in fieldnames if name is not None
+                }
+                required_aliases: dict[str, tuple[str, ...]] = {
+                    "id": ("id", "debris_id", "object_id"),
+                    "x": ("x",),
+                    "y": ("y",),
+                    "z": ("z",),
+                    "vx": ("vx",),
+                    "vy": ("vy",),
+                    "vz": ("vz",),
+                }
+
+                def resolve_column(canonical: str) -> str:
+                    aliases = required_aliases[canonical]
+                    for alias in aliases:
+                        if alias in normalized_to_actual:
+                            return normalized_to_actual[alias]
+                    raise CatalogValidationException(
+                        f"CSV header missing required column for '{canonical}'. "
+                        f"Expected one of: {', '.join(aliases)}"
                     )
-                    objects.append(DebrisObject(debris_id, position, velocity))
-        except Exception as exc:  # pragma: no cover - skeleton-level parsing guard
+
+                col_id = resolve_column("id")
+                col_x = resolve_column("x")
+                col_y = resolve_column("y")
+                col_z = resolve_column("z")
+                col_vx = resolve_column("vx")
+                col_vy = resolve_column("vy")
+                col_vz = resolve_column("vz")
+
+                def parse_float(raw: object, *, row_number: int, column: str) -> float:
+                    text = "" if raw is None else str(raw).strip()
+                    if text == "":
+                        raise CatalogValidationException(
+                            f"Row {row_number}: column '{column}' is empty."
+                        )
+                    try:
+                        value = float(text)
+                    except ValueError as exc:
+                        raise CatalogValidationException(
+                            f"Row {row_number}: column '{column}' must be a number (got {text!r})."
+                        ) from exc
+                    if not math.isfinite(value):
+                        raise CatalogValidationException(
+                            f"Row {row_number}: column '{column}' must be finite (got {text!r})."
+                        )
+                    return value
+
+                # DictReader row numbers start after the header; header is line 1.
+                for idx, row in enumerate(reader, start=2):
+                    debris_id = "" if row.get(col_id) is None else str(row.get(col_id)).strip()
+                    if debris_id == "":
+                        raise CatalogValidationException(f"Row {idx}: column '{col_id}' is empty.")
+
+                    position = Vector3(
+                        parse_float(row.get(col_x), row_number=idx, column=col_x),
+                        parse_float(row.get(col_y), row_number=idx, column=col_y),
+                        parse_float(row.get(col_z), row_number=idx, column=col_z),
+                    )
+                    velocity = Vector3(
+                        parse_float(row.get(col_vx), row_number=idx, column=col_vx),
+                        parse_float(row.get(col_vy), row_number=idx, column=col_vy),
+                        parse_float(row.get(col_vz), row_number=idx, column=col_vz),
+                    )
+                    objects.append(DebrisObject(debris_id=debris_id, position=position, velocity=velocity))
+        except CatalogValidationException:
+            raise
+        except Exception as exc:  # pragma: no cover - unexpected parsing guard
             raise CatalogValidationException(f"Failed to parse catalog: {path}") from exc
         return DebrisCatalog(objects=objects)
 
@@ -82,6 +148,25 @@ class CatalogValidator:
         """
         if catalog.get_object_count() == 0:
             raise CatalogValidationException("Catalog is empty.")
+        seen_ids: set[str] = set()
+        for obj in catalog.get_objects():
+            debris_id = obj.get_id()
+            if debris_id.strip() == "":
+                raise CatalogValidationException("Catalog contains a debris object with an empty id.")
+            if debris_id in seen_ids:
+                raise CatalogValidationException(f"Catalog contains duplicate debris id: {debris_id}")
+            seen_ids.add(debris_id)
+
+            for label, vector in (("position", obj.get_position()), ("velocity", obj.get_velocity())):
+                components = (vector.x, vector.y, vector.z)
+                if any(not isinstance(value, (float, int)) for value in components):
+                    raise CatalogValidationException(
+                        f"Catalog contains non-numeric {label} components for debris id: {debris_id}"
+                    )
+                if any(not math.isfinite(float(value)) for value in components):
+                    raise CatalogValidationException(
+                        f"Catalog contains non-finite {label} components for debris id: {debris_id}"
+                    )
 
     def validate_schema_row(self, row: list[str]) -> None:
         """Validate a single raw row shape.

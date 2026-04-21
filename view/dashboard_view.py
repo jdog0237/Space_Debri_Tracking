@@ -21,6 +21,9 @@ class DashboardView(View):
     def display_error(self, message: str) -> None:
         print(f"[ERROR] {message}")
 
+    def display_catalog_count(self, count: int) -> None:
+        print(f"Catalog loaded: {count} objects.")
+
     def refresh_alert_table(self, rows: list[EncounterResult]) -> None:
         print(f"Alert table refreshed with {len(rows)} rows.")
 
