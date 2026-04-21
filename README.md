@@ -12,3 +12,38 @@ The interface will include a sortable alert table highlighting high-risk objects
 
 The emphasis is on clarity, explainability, and rapid situational awareness rather than precise long-term orbital prediction.
 
+## Running the project
+
+From the repository root:
+
+```bash
+python3 main.py
+```
+
+## FR-1.1 CSV debris catalog format
+
+The catalog CSV must include a header row and the following columns:
+
+- `id` (or `debris_id` / `object_id`)
+- `x`, `y`, `z` (position components)
+- `vx`, `vy`, `vz` (velocity components)
+
+Example:
+
+```csv
+id,x,y,z,vx,vy,vz
+DEB-001,1000,2000,3000,1.2,-0.4,0.0
+DEB-002,-500,0,1200,0.0,7.5,-1.1
+```
+
+Notes:
+
+- Values must be numeric and finite (no blanks, `NaN`, or `inf`).
+- Debris IDs must be non-empty and unique.
+
+## Running tests
+
+```bash
+python3 -m unittest discover -s tests -q
+```
+
