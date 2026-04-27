@@ -58,7 +58,8 @@ class AnalysisCompletedEvent(ModelEvent):
     """Model event emitted when analysis results are available."""
 
     def __init__(self, source: Model, results: list[Any]) -> None:
-        super().__init__(
+        ModelEvent.__init__(
+            self,
             source=source,
             event_type="analysis_completed",
             payload=results,

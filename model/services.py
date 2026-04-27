@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import math
 import random
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .entities import (
@@ -210,27 +211,84 @@ class EncounterAnalyzer:
             PropagationException: If trajectory propagation is invalid.
         """
         try:
-            _ = config  # placeholder: full analysis will use window + step.
-            dx = debris.position.x - spacecraft.position.x
-            dy = debris.position.y - spacecraft.position.y
-            dz = debris.position.z - spacecraft.position.z
+            start_utc = self._parse_iso8601_utc(config.time_window_start_iso8601)
+            end_utc = self._parse_iso8601_utc(config.time_window_end_iso8601)
+            window_seconds = (end_utc - start_utc).total_seconds()
+            if window_seconds < 0:
+                raise AnalysisException("Analysis time window end must be after start.")
+
+            rel_position = Vector3(
+                x=debris.position.x - spacecraft.position.x,
+                y=debris.position.y - spacecraft.position.y,
+                z=debris.position.z - spacecraft.position.z,
+            )
+            rel_velocity = Vector3(
+                x=debris.velocity.x - spacecraft.velocity.x,
+                y=debris.velocity.y - spacecraft.velocity.y,
+                z=debris.velocity.z - spacecraft.velocity.z,
+            )
+            rel_speed_squared = (
+                rel_velocity.x * rel_velocity.x
+                + rel_velocity.y * rel_velocity.y
+                + rel_velocity.z * rel_velocity.z
+            )
+
+            # Compute unconstrained TCA analytically for linear relative motion,
+            # then clamp to the configured analysis window.
+            if rel_speed_squared <= 0.0:
+                tca_seconds = 0.0
+            else:
+                numerator = -(
+                    rel_position.x * rel_velocity.x
+                    + rel_position.y * rel_velocity.y
+                    + rel_position.z * rel_velocity.z
+                )
+                tca_seconds = numerator / rel_speed_squared
+            tca_seconds = max(0.0, min(window_seconds, tca_seconds))
+
+            debris_at_tca = self.propagator.propagate(
+                position=debris.position,
+                velocity=debris.velocity,
+                delta_t_seconds=tca_seconds,
+            )
+            spacecraft_at_tca = self.propagator.propagate(
+                position=spacecraft.position,
+                velocity=spacecraft.velocity,
+                delta_t_seconds=tca_seconds,
+            )
+
+            dx = debris_at_tca.x - spacecraft_at_tca.x
+            dy = debris_at_tca.y - spacecraft_at_tca.y
+            dz = debris_at_tca.z - spacecraft_at_tca.z
             minimum_separation = (dx * dx + dy * dy + dz * dz) ** 0.5
 
-            rvx = debris.velocity.x - spacecraft.velocity.x
-            rvy = debris.velocity.y - spacecraft.velocity.y
-            rvz = debris.velocity.z - spacecraft.velocity.z
-            relative_velocity = (rvx * rvx + rvy * rvy + rvz * rvz) ** 0.5
+            relative_velocity = rel_speed_squared**0.5
+            tca_iso8601 = (start_utc + (end_utc - start_utc) * (tca_seconds / window_seconds)
+                           if window_seconds > 0
+                           else start_utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
             return EncounterResult(
                 debris_id=debris.debris_id,
                 minimum_separation_meters=minimum_separation,
-                time_of_closest_approach_iso8601=config.time_window_start_iso8601,
+                time_of_closest_approach_iso8601=tca_iso8601,
                 relative_velocity_meters_per_second=relative_velocity,
                 risk_score=0.0,
                 rank=0,
             )
+        except AnalysisException:
+            raise
         except Exception as exc:
             raise AnalysisException("Failed to analyze debris encounter.", exc) from exc
+
+    @staticmethod
+    def _parse_iso8601_utc(value: str) -> datetime:
+        iso_value = value.strip()
+        if iso_value.endswith("Z"):
+            iso_value = iso_value[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(iso_value)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
 
 class RiskScoreCalculator:
