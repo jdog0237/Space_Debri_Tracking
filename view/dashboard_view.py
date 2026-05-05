@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from model.entities import EncounterResult
+from model.entities import EncounterResult, SpacecraftState
 from .mvc import View
 
 
@@ -23,6 +23,14 @@ class DashboardView(View):
 
     def display_catalog_count(self, count: int) -> None:
         print(f"Catalog loaded: {count} objects.")
+
+    def display_spacecraft_parameters(self, state: SpacecraftState) -> None:
+        pos = state.position
+        vel = state.velocity
+        print("Spacecraft parameters configured.")
+        print(f"  Position (m): x={pos.x}, y={pos.y}, z={pos.z}")
+        print(f"  Velocity (m/s): vx={vel.x}, vy={vel.y}, vz={vel.z}")
+        print(f"  Safety radius (m): {state.get_safety_radius_meters()}")
 
     def refresh_alert_table(self, rows: list[EncounterResult]) -> None:
         print(f"Alert table refreshed with {len(rows)} rows.")

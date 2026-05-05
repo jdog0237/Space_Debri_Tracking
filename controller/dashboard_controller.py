@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from model import DebrisTrackingModel, ModelEvent, ModelListener
+from model import DebrisTrackingModel, ModelEvent, ModelListener, SpacecraftState, Vector3
 from model.exceptions import AnalysisException, CatalogValidationException, InvalidInputException
 from view.dashboard_view import DashboardView
 
@@ -52,6 +52,27 @@ class DashboardController(AbstractController, ModelListener):
         try:
             self._debris_model.export_results_csv(path)
         except AnalysisException as exc:
+            self._dashboard_view.display_error(str(exc))
+
+    def handle_set_spacecraft_parameters(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        vx: float,
+        vy: float,
+        vz: float,
+        safety_radius_meters: float,
+    ) -> None:
+        try:
+            state = SpacecraftState(
+                position=Vector3(x, y, z),
+                velocity=Vector3(vx, vy, vz),
+                safety_radius_meters=safety_radius_meters,
+            )
+            self._debris_model.set_spacecraft_state(state)
+            self._dashboard_view.display_spacecraft_parameters(state)
+        except InvalidInputException as exc:
             self._dashboard_view.display_error(str(exc))
 
     def model_changed(self, event: ModelEvent) -> None:
