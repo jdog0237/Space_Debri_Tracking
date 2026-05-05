@@ -66,9 +66,17 @@ class DebrisTrackingModel(AbstractModel):
     def set_spacecraft_state(self, state: SpacecraftState) -> None:
         """Set spacecraft state.
 
+        State is updated only if position, velocity, and safety radius all validate.
+
         Raises:
-            InvalidInputException: If safety radius is invalid.
+            InvalidInputException: If any spacecraft parameter is invalid.
         """
+        self._input_validator.validate_numeric_vector(
+            [state.position.x, state.position.y, state.position.z]
+        )
+        self._input_validator.validate_numeric_vector(
+            [state.velocity.x, state.velocity.y, state.velocity.z]
+        )
         self._input_validator.validate_positive(state.safety_radius_meters)
         self.spacecraft = state
 

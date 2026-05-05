@@ -301,24 +301,31 @@ class RiskScoreCalculator:
 
 class InputValidator:
     def validate_numeric_vector(self, components: list[float]) -> None:
-        """Validate that all vector components are finite numbers.
+        """Validate that a vector has exactly three finite numeric components.
 
         Raises:
-            InvalidInputException: If any component is not numeric.
+            InvalidInputException: If the vector shape or values are invalid.
         """
         if len(components) != 3:
             raise InvalidInputException("Vector must have exactly 3 components.")
         for value in components:
-            if not isinstance(value, (float, int)):
+            if not isinstance(value, (float, int)) or isinstance(value, bool):
                 raise InvalidInputException("Vector components must be numeric.")
+            if not math.isfinite(float(value)):
+                raise InvalidInputException("Vector components must be finite numbers.")
 
     def validate_positive(self, value: float) -> None:
-        """Validate positive scalar values.
+        """Validate strictly positive finite scalar values.
 
         Raises:
-            InvalidInputException: If value is not positive.
+            InvalidInputException: If value is not a finite number > 0.
         """
-        if value <= 0:
+        if not isinstance(value, (float, int)) or isinstance(value, bool):
+            raise InvalidInputException("Value must be numeric.")
+        fv = float(value)
+        if not math.isfinite(fv):
+            raise InvalidInputException("Value must be finite.")
+        if fv <= 0:
             raise InvalidInputException("Value must be positive.")
 
 
