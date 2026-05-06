@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-from model import DebrisTrackingModel, ModelEvent, ModelListener, SpacecraftState, Vector3
+from model import (
+    AnalysisConfiguration,
+    DebrisTrackingModel,
+    ModelEvent,
+    ModelListener,
+    SpacecraftState,
+    Vector3,
+)
 from model.exceptions import AnalysisException, CatalogValidationException, InvalidInputException
-from view.dashboard_view import DashboardView
+from view.dashboard_presenter import DashboardPresenter
 
 from .mvc import AbstractController
 
 
 class DashboardController(AbstractController, ModelListener):
-    def __init__(self, model: DebrisTrackingModel, view: DashboardView) -> None:
+    def __init__(self, model: DebrisTrackingModel, view: DashboardPresenter) -> None:
         super().__init__(model=model, view=view)
         self._debris_model = model
         self._dashboard_view = view
@@ -75,6 +82,13 @@ class DashboardController(AbstractController, ModelListener):
         except InvalidInputException as exc:
             self._dashboard_view.display_error(str(exc))
 
+    def handle_set_analysis_configuration(self, config: AnalysisConfiguration) -> None:
+        try:
+            self._debris_model.set_analysis_configuration(config)
+            self._dashboard_view.display_analysis_configuration(config)
+        except InvalidInputException as exc:
+            self._dashboard_view.display_error(str(exc))
+
     def model_changed(self, event: ModelEvent) -> None:
         self.handle_model_event(event)
 
@@ -83,3 +97,6 @@ class DashboardController(AbstractController, ModelListener):
             results = self._debris_model.get_ranked_encounters()
             self._dashboard_view.refresh_alert_table(results)
             self._dashboard_view.refresh_timeline(results)
+            distance_series, geometries = self._debris_model.build_visualization_data()
+            self._dashboard_view.refresh_distance_plots(distance_series)
+            self._dashboard_view.refresh_encounter_geometry(geometries)

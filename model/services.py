@@ -12,11 +12,147 @@ from .entities import (
     AnalysisConfiguration,
     DebrisCatalog,
     DebrisObject,
+    DistanceTimeSeries,
+    EncounterGeometry2D,
     EncounterResult,
     SpacecraftState,
     Vector3,
 )
 from .exceptions import AnalysisException, CatalogValidationException, InvalidInputException
+
+
+def parse_iso8601_utc(value: str) -> datetime:
+    iso_value = value.strip()
+    if iso_value.endswith("Z"):
+        iso_value = iso_value[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(iso_value)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def compute_tca_seconds_in_window(
+    rel_position: Vector3,
+    rel_velocity: Vector3,
+    window_seconds: float,
+) -> float:
+    rel_speed_squared = (
+        rel_velocity.x * rel_velocity.x
+        + rel_velocity.y * rel_velocity.y
+        + rel_velocity.z * rel_velocity.z
+    )
+    if rel_speed_squared <= 0.0:
+        tca_seconds = 0.0
+    else:
+        numerator = -(
+            rel_position.x * rel_velocity.x
+            + rel_position.y * rel_velocity.y
+            + rel_position.z * rel_velocity.z
+        )
+        tca_seconds = numerator / rel_speed_squared
+    return max(0.0, min(window_seconds, tca_seconds))
+
+
+def format_iso8601_z(timestamp_utc: datetime) -> str:
+    return timestamp_utc.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def iso8601_at_elapsed(
+    start_utc: datetime,
+    end_utc: datetime,
+    window_seconds: float,
+    elapsed_seconds: float,
+) -> str:
+    if window_seconds > 0:
+        ts = start_utc + (end_utc - start_utc) * (elapsed_seconds / window_seconds)
+    else:
+        ts = start_utc
+    return format_iso8601_z(ts)
+
+
+def sample_separation_time_series(
+    debris: DebrisObject,
+    spacecraft: SpacecraftState,
+    config: AnalysisConfiguration,
+    propagator: ConstantVelocityPropagator,
+) -> DistanceTimeSeries:
+    """Sample separation distance between debris and spacecraft over the window."""
+    start_utc = parse_iso8601_utc(config.time_window_start_iso8601)
+    end_utc = parse_iso8601_utc(config.time_window_end_iso8601)
+    window_seconds = (end_utc - start_utc).total_seconds()
+    if window_seconds < 0:
+        raise AnalysisException("Analysis time window end must be after start.")
+
+    step = config.time_step_seconds
+    times: list[str] = []
+    distances: list[float] = []
+    if step <= 0:
+        raise AnalysisException("Time step must be positive.")
+
+    if window_seconds == 0:
+        n_steps = 0
+    else:
+        n_steps = int(math.ceil(window_seconds / step))
+
+    for i in range(n_steps + 1):
+        elapsed = min(window_seconds, i * step)
+        debris_pos = propagator.propagate(debris.position, debris.velocity, elapsed)
+        sc_pos = propagator.propagate(spacecraft.position, spacecraft.velocity, elapsed)
+        dx = debris_pos.x - sc_pos.x
+        dy = debris_pos.y - sc_pos.y
+        dz = debris_pos.z - sc_pos.z
+        separation = math.sqrt(dx * dx + dy * dy + dz * dz)
+        times.append(iso8601_at_elapsed(start_utc, end_utc, window_seconds, elapsed))
+        distances.append(separation)
+
+    return DistanceTimeSeries(
+        debris_id=debris.debris_id,
+        time_iso8601=tuple(times),
+        distance_meters=tuple(distances),
+    )
+
+
+def build_encounter_geometry_xy(
+    debris: DebrisObject,
+    spacecraft: SpacecraftState,
+    config: AnalysisConfiguration,
+    propagator: ConstantVelocityPropagator,
+) -> EncounterGeometry2D:
+    """XY-plane geometry at the time of closest approach within the window."""
+    start_utc = parse_iso8601_utc(config.time_window_start_iso8601)
+    end_utc = parse_iso8601_utc(config.time_window_end_iso8601)
+    window_seconds = (end_utc - start_utc).total_seconds()
+    if window_seconds < 0:
+        raise AnalysisException("Analysis time window end must be after start.")
+
+    rel_position = Vector3(
+        x=debris.position.x - spacecraft.position.x,
+        y=debris.position.y - spacecraft.position.y,
+        z=debris.position.z - spacecraft.position.z,
+    )
+    rel_velocity = Vector3(
+        x=debris.velocity.x - spacecraft.velocity.x,
+        y=debris.velocity.y - spacecraft.velocity.y,
+        z=debris.velocity.z - spacecraft.velocity.z,
+    )
+    tca_seconds = compute_tca_seconds_in_window(rel_position, rel_velocity, window_seconds)
+
+    debris_at = propagator.propagate(debris.position, debris.velocity, tca_seconds)
+    sc_at = propagator.propagate(spacecraft.position, spacecraft.velocity, tca_seconds)
+
+    dx = debris_at.x - sc_at.x
+    dy = debris_at.y - sc_at.y
+    dz = debris_at.z - sc_at.z
+    minimum_separation = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    return EncounterGeometry2D(
+        debris_id=debris.debris_id,
+        spacecraft_x_meters=sc_at.x,
+        spacecraft_y_meters=sc_at.y,
+        debris_x_meters=debris_at.x,
+        debris_y_meters=debris_at.y,
+        minimum_separation_meters=minimum_separation,
+    )
 
 
 class DebrisCatalogLoader:
@@ -211,8 +347,8 @@ class EncounterAnalyzer:
             PropagationException: If trajectory propagation is invalid.
         """
         try:
-            start_utc = self._parse_iso8601_utc(config.time_window_start_iso8601)
-            end_utc = self._parse_iso8601_utc(config.time_window_end_iso8601)
+            start_utc = parse_iso8601_utc(config.time_window_start_iso8601)
+            end_utc = parse_iso8601_utc(config.time_window_end_iso8601)
             window_seconds = (end_utc - start_utc).total_seconds()
             if window_seconds < 0:
                 raise AnalysisException("Analysis time window end must be after start.")
@@ -233,18 +369,7 @@ class EncounterAnalyzer:
                 + rel_velocity.z * rel_velocity.z
             )
 
-            # Compute unconstrained TCA analytically for linear relative motion,
-            # then clamp to the configured analysis window.
-            if rel_speed_squared <= 0.0:
-                tca_seconds = 0.0
-            else:
-                numerator = -(
-                    rel_position.x * rel_velocity.x
-                    + rel_position.y * rel_velocity.y
-                    + rel_position.z * rel_velocity.z
-                )
-                tca_seconds = numerator / rel_speed_squared
-            tca_seconds = max(0.0, min(window_seconds, tca_seconds))
+            tca_seconds = compute_tca_seconds_in_window(rel_position, rel_velocity, window_seconds)
 
             debris_at_tca = self.propagator.propagate(
                 position=debris.position,
@@ -263,9 +388,7 @@ class EncounterAnalyzer:
             minimum_separation = (dx * dx + dy * dy + dz * dz) ** 0.5
 
             relative_velocity = rel_speed_squared**0.5
-            tca_iso8601 = (start_utc + (end_utc - start_utc) * (tca_seconds / window_seconds)
-                           if window_seconds > 0
-                           else start_utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            tca_iso8601 = iso8601_at_elapsed(start_utc, end_utc, window_seconds, tca_seconds)
 
             return EncounterResult(
                 debris_id=debris.debris_id,
@@ -279,16 +402,6 @@ class EncounterAnalyzer:
             raise
         except Exception as exc:
             raise AnalysisException("Failed to analyze debris encounter.", exc) from exc
-
-    @staticmethod
-    def _parse_iso8601_utc(value: str) -> datetime:
-        iso_value = value.strip()
-        if iso_value.endswith("Z"):
-            iso_value = iso_value[:-1] + "+00:00"
-        parsed = datetime.fromisoformat(iso_value)
-        if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
 
 
 class RiskScoreCalculator:

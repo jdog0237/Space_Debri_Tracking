@@ -5,6 +5,8 @@ from __future__ import annotations
 from .entities import (
     AnalysisConfiguration,
     DebrisCatalog,
+    DistanceTimeSeries,
+    EncounterGeometry2D,
     EncounterResult,
     SpacecraftState,
 )
@@ -19,6 +21,8 @@ from .services import (
     RiskScoreCalculator,
     SyntheticCatalogGenerator,
     ConstantVelocityPropagator,
+    build_encounter_geometry_xy,
+    sample_separation_time_series,
 )
 
 
@@ -122,6 +126,43 @@ class DebrisTrackingModel(AbstractModel):
 
     def get_ranked_encounters(self) -> list[EncounterResult]:
         return list(self.last_results)
+
+    def build_visualization_data(
+        self, max_distance_plots: int = 5
+    ) -> tuple[dict[str, DistanceTimeSeries], list[EncounterGeometry2D]]:
+        """Prepare distance-versus-time series and XY encounter geometry for dashboard plots."""
+        if self.spacecraft is None or self.analysis_config is None:
+            raise AnalysisException(
+                "Cannot build visualization without spacecraft and analysis configuration."
+            )
+        if not self.last_results:
+            return {}, []
+
+        propagator = self._encounter_analyzer.propagator
+        debris_by_id = {d.debris_id: d for d in self.catalog.get_objects()}
+        distance_series: dict[str, DistanceTimeSeries] = {}
+        geometries: list[EncounterGeometry2D] = []
+
+        for result in self.last_results[:max_distance_plots]:
+            debris = debris_by_id.get(result.debris_id)
+            if debris is None:
+                continue
+            distance_series[result.debris_id] = sample_separation_time_series(
+                debris,
+                self.spacecraft,
+                self.analysis_config,
+                propagator,
+            )
+            geometries.append(
+                build_encounter_geometry_xy(
+                    debris,
+                    self.spacecraft,
+                    self.analysis_config,
+                    propagator,
+                )
+            )
+
+        return distance_series, geometries
 
     def export_results_csv(self, path: str) -> None:
         """Export latest results.

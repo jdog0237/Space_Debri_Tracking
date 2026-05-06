@@ -1,6 +1,8 @@
 # UML Class Diagram — Space Debris Tracking & Collision Risk Dashboard
 
-This diagram reflects the [SRS](SRS.md) functional requirements (catalog ingestion, spacecraft parameters, constant-velocity analysis, ranked risk, dashboard visualization, CSV export) and an MVC separation with shared eventing. Method signatures use UML-style visibility; **throws** clauses are shown where operations can signal the listed domain exceptions.
+This diagram reflects the [SRS](SRS.md) functional requirements (catalog ingestion, spacecraft parameters, constant-velocity analysis, ranked risk, dashboard visualization, CSV export) and an MVC separation with shared eventing. **Reverse-engineered from the Python codebase** (Task 4 console visualization). Method signatures mix Python identifiers (`snake_case`) with UML-style types where helpful; **throws** clauses are shown where operations can signal the listed domain exceptions.
+
+Module-level helpers in `model/services.py` (`parse_iso8601_utc`, `compute_tca_seconds_in_window`, `sample_separation_time_series`, `build_encounter_geometry_xy`) implement shared timing/propagation math used by both `EncounterAnalyzer` and `DebrisTrackingModel.build_visualization_data`—shown below only via dependency notes.
 
 ---
 
@@ -52,16 +54,18 @@ classDiagram
     class DebrisTrackingModel {
       -catalog: DebrisCatalog
       -spacecraft: SpacecraftState
-      -analysisConfig: AnalysisConfiguration
-      -lastResults: List~EncounterResult~
+      -analysis_config: AnalysisConfiguration
+      -last_results: List~EncounterResult~
       +DebrisTrackingModel()
-      +loadCatalogFromCsv(path: String) void
-      +setSpacecraftState(state: SpacecraftState) void
-      +setAnalysisConfiguration(config: AnalysisConfiguration) void
-      +runCollisionAnalysis() void
-      +getCatalog() DebrisCatalog
-      +getRankedEncounters() List~EncounterResult~
-      +exportResultsCsv(path: String) void
+      +load_catalog_from_csv(path: String) void
+      +generate_synthetic_catalog(count: int) void
+      +set_spacecraft_state(state: SpacecraftState) void
+      +set_analysis_configuration(config: AnalysisConfiguration) void
+      +run_collision_analysis() void
+      +get_catalog() DebrisCatalog
+      +get_ranked_encounters() List~EncounterResult~
+      +build_visualization_data(max_distance_plots: int) Tuple
+      +export_results_csv(path: String) void
     }
 
     class Vector3 {
@@ -69,34 +73,34 @@ classDiagram
       -y: double
       -z: double
       +Vector3(x, y, z)
-      +getX() double
-      +getY() double
-      +getZ() double
+      +get_x() double
+      +get_y() double
+      +get_z() double
     }
 
     class DebrisObject {
-      -id: String
+      -debris_id: String
       -position: Vector3
       -velocity: Vector3
-      +DebrisObject(id, position, velocity)
-      +getId() String
-      +getPosition() Vector3
-      +getVelocity() Vector3
+      +DebrisObject(debris_id, position, velocity)
+      +get_id() String
+      +get_position() Vector3
+      +get_velocity() Vector3
     }
 
     class SpacecraftState {
       -position: Vector3
       -velocity: Vector3
-      -safetyRadiusMeters: double
-      +SpacecraftState(position, velocity, safetyRadiusMeters)
-      +getSafetyRadiusMeters() double
+      -safety_radius_meters: double
+      +SpacecraftState(position, velocity, safety_radius_meters)
+      +get_safety_radius_meters() double
     }
 
     class AnalysisConfiguration {
-      -timeWindowStartIso8601: String
-      -timeWindowEndIso8601: String
-      -timeStepSeconds: double
-      +AnalysisConfiguration(start, end, timeStepSeconds)
+      -time_window_start_iso8601: String
+      -time_window_end_iso8601: String
+      -time_step_seconds: double
+      +AnalysisConfiguration(start, end, time_step_seconds)
     }
 
     class DebrisCatalog {
@@ -107,23 +111,41 @@ classDiagram
     }
 
     class EncounterResult {
-      -debrisId: String
-      -minimumSeparationMeters: double
-      -timeOfClosestApproachIso8601: String
-      -relativeVelocityMetersPerSecond: double
-      -riskScore: double
+      -debris_id: String
+      -minimum_separation_meters: double
+      -time_of_closest_approach_iso8601: String
+      -relative_velocity_meters_per_second: double
+      -risk_score: double
       -rank: int
       +EncounterResult(...)
-      +getRiskScore() double
+      +get_risk_score() double
+    }
+
+    class DistanceTimeSeries {
+      <<value object>>
+      -debris_id: String
+      -time_iso8601: Tuple~String~
+      -distance_meters: Tuple~double~
+      +DistanceTimeSeries(debris_id, time_iso8601, distance_meters)
+    }
+
+    class EncounterGeometry2D {
+      <<value object>>
+      -debris_id: String
+      -spacecraft_x_meters: double
+      -spacecraft_y_meters: double
+      -debris_x_meters: double
+      -debris_y_meters: double
+      -minimum_separation_meters: double
+      +EncounterGeometry2D(...)
     }
 
     class DebrisCatalogLoader {
       +DebrisCatalogLoader()
-      +loadFromCsv(path: String) DebrisCatalog
+      +load_from_csv(path: String) DebrisCatalog
     }
 
     class SyntheticCatalogGenerator {
-      -randomSeed: long
       +SyntheticCatalogGenerator(seed: long)
       +generate(count: int) DebrisCatalog
     }
@@ -131,12 +153,12 @@ classDiagram
     class CatalogValidator {
       +CatalogValidator()
       +validate(catalog: DebrisCatalog) void
-      +validateSchemaRow(row: String[]) void
+      +validate_schema_row(row: String[]) void
     }
 
     class ConstantVelocityPropagator {
       +ConstantVelocityPropagator()
-      +propagate(position: Vector3, velocity: Vector3, deltaTSeconds: double) Vector3
+      +propagate(position: Vector3, velocity: Vector3, delta_t_seconds: double) Vector3
     }
 
     class EncounterAnalyzer {
@@ -146,18 +168,18 @@ classDiagram
 
     class RiskScoreCalculator {
       +RiskScoreCalculator()
-      +computeScore(metrics: EncounterResult) double
+      +compute_score(metrics: EncounterResult) double
     }
 
     class InputValidator {
       +InputValidator()
-      +validateNumericVector(components: double[]) void
-      +validatePositive(value: double) void
+      +validate_numeric_vector(components: double[]) void
+      +validate_positive(value: double) void
     }
 
     class ResultExporter {
       +ResultExporter()
-      +exportCsv(path: String, results: List~EncounterResult~) void
+      +export_csv(path: String, results: List~EncounterResult~) void
     }
 
     class CatalogValidationException {
@@ -184,23 +206,29 @@ classDiagram
   subgraph view["«package» view"]
     class View {
       <<interface>>
-      +setController(controller: Controller) void
+      +set_controller(controller: Controller) void
       +show() void
-      +displayError(message: String) void
+      +display_error(message: String) void
     }
 
     class DashboardView {
       -controller: Controller
+      -alert_sort_column: String
+      -alert_sort_descending: bool
       +DashboardView()
-      +setController(controller) void
+      +set_controller(controller) void
+      +set_alert_table_sort(column: String, descending: bool) void
+      +get_alert_table_sort() Tuple
       +show() void
-      +displayError(message) void
-      +refreshAlertTable(rows: List~EncounterResult~) void
-      +refreshTimeline(events: List~EncounterResult~) void
-      +refreshDistancePlots(series: Object) void
-      +refreshEncounterGeometry(viewModel: Object) void
-      +onExportCsvRequested(path: String) void
-      +onRunAnalysisRequested() void
+      +display_error(message) void
+      +display_catalog_count(count: int) void
+      +display_spacecraft_parameters(state: SpacecraftState) void
+      +refresh_alert_table(rows: List~EncounterResult~) void
+      +refresh_timeline(events: List~EncounterResult~) void
+      +refresh_distance_plots(series_by_id: Map~String, DistanceTimeSeries~) void
+      +refresh_encounter_geometry(geometries: List~EncounterGeometry2D~) void
+      +on_export_csv_requested(path: String) void
+      +on_run_analysis_requested() void
     }
   end
 
@@ -215,22 +243,27 @@ classDiagram
       -model: Model
       -view: View
       +AbstractController(model: Model, view: View)
-      +getModel() Model
-      +getView() View
+      +get_model() Model
+      +get_view() View
       +initialize() void
-      #wireViewActions() void
+      #wire_view_actions() void
     }
 
     class DashboardController {
-      -debrisModel: DebrisTrackingModel
-      -dashboardView: DashboardView
+      -debris_model: DebrisTrackingModel
+      -dashboard_view: DashboardView
       +DashboardController(model: DebrisTrackingModel, view: DashboardView)
       +initialize() void
-      +handleLoadCatalog(path: String) void
-      +handleRunAnalysis() void
-      +handleExportCsv(path: String) void
-      +handleModelEvent(event: ModelEvent) void
+      +handle_load_catalog(path: String) void
+      +handle_generate_synthetic_catalog(count: int) void
+      +handle_run_analysis() void
+      +handle_export_csv(path: String) void
+      +handle_set_spacecraft_parameters(x, y, z, vx, vy, vz, safety_radius_meters) void
+      +model_changed(event: ModelEvent) void
+      +handle_model_event(event: ModelEvent) void
     }
+
+    note for DashboardController "Also realizes ModelListener via multiple inheritance (DashboardController(AbstractController, ModelListener))."
 
     class SpaceDebrisApplication {
       +SpaceDebrisApplication()
@@ -248,6 +281,7 @@ classDiagram
   AbstractController ..> View : uses
   DashboardView ..|> View : realizes
   DashboardController --|> AbstractController
+  ModelListener <|.. DashboardController : realizes
   DashboardController ..> DebrisTrackingModel
   DashboardController ..> DashboardView
   DebrisTrackingModel ..|> Model : realizes
@@ -276,6 +310,11 @@ classDiagram
   EncounterAnalyzer *-- ConstantVelocityPropagator
   EncounterAnalyzer ..> EncounterResult : creates
 
+  DebrisTrackingModel ..> DistanceTimeSeries : builds
+  DebrisTrackingModel ..> EncounterGeometry2D : builds
+  DashboardView ..> DistanceTimeSeries : renders
+  DashboardView ..> EncounterGeometry2D : renders
+
   %% Exceptions — dependency (operations throw)
   DebrisCatalogLoader ..> CatalogValidationException : throws
   CatalogValidator ..> CatalogValidationException : throws
@@ -284,6 +323,7 @@ classDiagram
   DebrisTrackingModel ..> CatalogValidationException : throws
   DebrisTrackingModel ..> InvalidInputException : throws
   DebrisTrackingModel ..> AnalysisException : throws
+  DebrisTrackingModel ..> PropagationException : throws
   EncounterAnalyzer ..> AnalysisException : throws
   EncounterAnalyzer ..> PropagationException : throws
   ResultExporter ..> AnalysisException : throws
@@ -295,25 +335,30 @@ classDiagram
 
 ---
 
-## Operation ↔ exception mapping (first pass)
+## Operation ↔ exception mapping (code-aligned)
 
 | Operation | Throws |
 |-----------|--------|
-| `DebrisCatalogLoader.loadFromCsv` | `CatalogValidationException` |
-| `CatalogValidator.validate` / `validateSchemaRow` | `CatalogValidationException` |
+| `DebrisCatalogLoader.load_from_csv` | `CatalogValidationException` |
+| `CatalogValidator.validate` / `validate_schema_row` | `CatalogValidationException` |
 | `SyntheticCatalogGenerator.generate` | `InvalidInputException` |
-| `InputValidator.validateNumericVector` / `validatePositive` | `InvalidInputException` |
-| `DebrisTrackingModel.loadCatalogFromCsv` | `CatalogValidationException`, `InvalidInputException` |
-| `DebrisTrackingModel.setSpacecraftState` | `InvalidInputException` |
-| `DebrisTrackingModel.runCollisionAnalysis` | `AnalysisException`, `PropagationException` |
-| `DebrisTrackingModel.exportResultsCsv` | `AnalysisException` |
+| `InputValidator.validate_numeric_vector` / `validate_positive` | `InvalidInputException` |
+| `DebrisTrackingModel.load_catalog_from_csv` | `CatalogValidationException`, `InvalidInputException` |
+| `DebrisTrackingModel.generate_synthetic_catalog` | `CatalogValidationException`, `InvalidInputException` |
+| `DebrisTrackingModel.set_spacecraft_state` | `InvalidInputException` |
+| `DebrisTrackingModel.set_analysis_configuration` | `InvalidInputException` |
+| `DebrisTrackingModel.run_collision_analysis` | `AnalysisException`, `PropagationException` |
+| `DebrisTrackingModel.build_visualization_data` | `AnalysisException` |
+| `DebrisTrackingModel.export_results_csv` | `AnalysisException` |
 | `EncounterAnalyzer.analyze` | `AnalysisException`, `PropagationException` |
-| `ConstantVelocityPropagator.propagate` | `PropagationException` (e.g. invalid time step) |
+| `sample_separation_time_series` | `AnalysisException` |
+| `build_encounter_geometry_xy` | `AnalysisException` |
+| `ConstantVelocityPropagator.propagate` | `PropagationException` (negative `delta_t_seconds`) |
 
 ---
 
 ## Notes
 
-- **FR coverage:** catalog CSV/synthetic (FR-1.x), spacecraft vectors and validation (FR-2.x), constant-velocity simulation and metrics + risk + ranking (FR-3.x), dashboard surfaces and CSV export (FR-4.x).
-- **MVC:** `Model` / `AbstractModel` / `DebrisTrackingModel` hold state and notify `ModelListener`; `View` / `DashboardView` present alerts, timeline, plots, and geometry; `Controller` / `AbstractController` / `DashboardController` coordinate user actions and model updates. `SpaceDebrisApplication.main` is the entry point that wires concrete MVC instances.
-- **Reverse engineering:** When you implement packages in code, regenerate a diagram from the codebase (e.g. Pyreverse, PlantUML from annotations, or IDE UML export) and replace or supplement this document for consistency.
+- **FR coverage:** catalog CSV/synthetic (FR-1.x), spacecraft vectors and validation (FR-2.x), constant-velocity simulation and metrics + risk + ranking (FR-3.x), console dashboard surfaces including sortable alerts, TCA timeline, sampled distance plots, XY encounter sketches, and CSV export (FR-4.x).
+- **MVC:** `Model` / `AbstractModel` / `DebrisTrackingModel` hold state and notify `ModelListener`; `View` / `DashboardView` renders FR-4 outputs as text; `DashboardController` (`AbstractController` + `ModelListener`) bridges CSV/catalog actions, analysis runs, exports, and visualization refresh on `analysis_completed`. `SpaceDebrisApplication.main` wires MVC and parses CLI flags (`--catalog`, `--export`, `--sort`, `--ascending`).
+- **Reverse engineering:** This diagram was updated to match the repository implementation (Python 3.10+, stdlib-only visualization). External diagram generators may still be used for alternate layouts, but names now track `snake_case` Python APIs.
