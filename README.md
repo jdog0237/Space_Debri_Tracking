@@ -14,10 +14,22 @@ The emphasis is on clarity, explainability, and rapid situational awareness rath
 
 ## Running the project
 
-From the repository root:
+Install visualization dependencies once (matplotlib + NumPy wheels):
+
+```bash
+pip install -r requirements.txt
+```
+
+From the repository root, launch the **interactive GUI** (default):
 
 ```bash
 python3 main.py
+```
+
+Use the **console dashboard** instead (no GUI stack needed):
+
+```bash
+python3 main.py --cli
 ```
 
 ## FR-1.1 CSV debris catalog format

@@ -76,3 +76,24 @@ class EncounterResult:
 
     def get_risk_score(self) -> float:
         return self.risk_score
+
+
+@dataclass(frozen=True, slots=True)
+class DistanceTimeSeries:
+    """Samples of separation distance over the analysis window (FR-4.3)."""
+
+    debris_id: str
+    time_iso8601: tuple[str, ...]
+    distance_meters: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EncounterGeometry2D:
+    """Projected spacecraft and debris positions at TCA in the XY plane (FR-4.4)."""
+
+    debris_id: str
+    spacecraft_x_meters: float
+    spacecraft_y_meters: float
+    debris_x_meters: float
+    debris_y_meters: float
+    minimum_separation_meters: float

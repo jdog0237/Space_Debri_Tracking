@@ -1,0 +1,2 @@
+# GUI visualization (TkAgg backend uses system Tk via tkinter + matplotlib figures).
+matplotlib>=3.8.0
