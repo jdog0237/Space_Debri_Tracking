@@ -1,0 +1,460 @@
+Task 1 Prompt — Upload or Generate Debris Catalog
+
+
+<CRITICAL_REQUIREMENT>
+You are an expert Python developer. Implement Task 1 fully and safely.
+The code MUST handle edge cases for empty inputs, missing files, malformed CSV data, duplicate IDs, missing columns, non-numeric values, NaN, infinity, and invalid synthetic catalog counts.
+Do NOT break existing MVC structure.
+</CRITICAL_REQUIREMENT>
+
+<CONTEXT>
+Project: Space Debris Tracking and Collision Risk Dashboard.
+
+Task 1 Requirements:
+- FR-1.1: Accept CSV debris catalogs.
+- FR-1.2: Validate schema and data types.
+- FR-1.3: Generate synthetic debris objects.
+- FR-1.4: Display object count.
+
+Expected CSV columns:
+id,x,y,z,vx,vy,vz
+
+Allow ID aliases:
+id, debris_id, object_id
+
+Existing architecture:
+- model/entities.py contains Vector3, DebrisObject, DebrisCatalog.
+- model/services.py should contain DebrisCatalogLoader, CatalogValidator, SyntheticCatalogGenerator, InputValidator.
+- model/debris_tracking_model.py should orchestrate loading and validation.
+- controller/dashboard_controller.py should call model methods and display results through the view.
+- view/dashboard_view.py should display catalog count and errors.
+</CONTEXT>
+
+<YOUR_TASK>
+Implement or verify Task 1 across the project.
+
+Required implementation:
+1. DebrisCatalogLoader.load_from_csv(path)
+   - Reject empty path.
+   - Reject missing file.
+   - Reject CSV with no header.
+   - Support id/debris_id/object_id aliases.
+   - Require x,y,z,vx,vy,vz.
+   - Convert numeric fields to float.
+   - Reject blanks, invalid numbers, NaN, and infinity.
+
+2. CatalogValidator.validate(catalog)
+   - Reject empty catalog.
+   - Reject duplicate debris IDs.
+   - Reject empty debris IDs.
+   - Reject non-numeric or non-finite position/velocity values.
+
+3. SyntheticCatalogGenerator.generate(count)
+   - Reject count <= 0.
+   - Generate unique debris IDs.
+   - Generate finite numeric positions and velocities.
+
+4. DebrisTrackingModel
+   - Add load_catalog_from_csv(path).
+   - Add generate_synthetic_catalog(count).
+   - Validate before storing catalog.
+
+5. DashboardController
+   - Add handle_load_catalog(path).
+   - Add handle_generate_synthetic_catalog(count).
+   - Catch CatalogValidationException and InvalidInputException.
+   - Display catalog count on success.
+
+6. DashboardView
+   - Add display_catalog_count(count).
+   - Add display_error(message).
+
+7. Tests
+   - Add or update tests for:
+     - valid CSV loading
+     - ID aliases
+     - missing columns
+     - non-numeric values
+     - NaN/inf values
+     - duplicate IDs
+     - empty catalog
+     - valid synthetic generation
+     - invalid synthetic count
+
+Run:
+python3 -m unittest discover -s tests -q
+</YOUR_TASK>
+
+<REITERATION>
+Remember: Task 1 MUST include proper error handling and edge case management for empty inputs, malformed CSV files, invalid numeric data, duplicate IDs, and invalid synthetic generation counts. Do not break Tasks 2, 3, or existing MVC structure.
+</REITERATION>
+
+
+
+Task 2 Prompt — Define Spacecraft Parameters
+
+
+
+<CRITICAL_REQUIREMENT>
+You are an expert Python developer. Implement Task 2 fully and safely.
+The code MUST handle edge cases for empty inputs, non-numeric values, bool values, NaN, infinity, zero safety radius, negative safety radius, and invalid vector length.
+The spacecraft state MUST only be saved after all validation passes.
+</CRITICAL_REQUIREMENT>
+
+<CONTEXT>
+Project: Space Debris Tracking and Collision Risk Dashboard.
+
+Task 2 Requirements:
+- FR-2.1: Allow input of position vector x,y,z.
+- FR-2.2: Allow input of velocity vector vx,vy,vz.
+- FR-2.3: Allow definition of safety radius.
+- FR-2.4: Validate numeric inputs.
+
+Existing architecture:
+- model/entities.py contains Vector3 and SpacecraftState.
+- model/services.py contains InputValidator.
+- model/debris_tracking_model.py contains DebrisTrackingModel.set_spacecraft_state.
+- controller/dashboard_controller.py handles user actions.
+- view/dashboard_view.py displays outputs and errors.
+</CONTEXT>
+
+<YOUR_TASK>
+Implement Task 2 across the project.
+
+Required implementation:
+1. InputValidator.validate_numeric_vector(components)
+   - Require exactly 3 components.
+   - Reject non-numeric values.
+   - Reject bool values.
+   - Reject NaN.
+   - Reject infinity.
+   - Raise InvalidInputException with clear messages.
+
+2. InputValidator.validate_positive(value)
+   - Reject non-numeric values.
+   - Reject bool values.
+   - Reject NaN.
+   - Reject infinity.
+   - Reject zero and negative values.
+   - Raise InvalidInputException with clear messages.
+
+3. DebrisTrackingModel.set_spacecraft_state(state)
+   - Validate position vector.
+   - Validate velocity vector.
+   - Validate safety_radius_meters.
+   - Store self.spacecraft only after all validation succeeds.
+
+4. DashboardController.handle_set_spacecraft_parameters(...)
+   - Accept x,y,z,vx,vy,vz,safety_radius_meters.
+   - Build Vector3 position.
+   - Build Vector3 velocity.
+   - Build SpacecraftState.
+   - Call model.set_spacecraft_state.
+   - On success call view.display_spacecraft_parameters.
+   - Catch InvalidInputException and call view.display_error.
+
+5. DashboardView
+   - Add display_spacecraft_parameters(state).
+   - Print position, velocity, and safety radius clearly.
+
+6. Tests
+   - Add tests/test_spacecraft_parameters.py.
+   - Test valid input.
+   - Test negative radius.
+   - Test zero radius.
+   - Test NaN position.
+   - Test infinite velocity.
+   - Test NaN radius.
+   - Test infinite radius.
+   - Test invalid vector length.
+   - Test state is not overwritten when validation fails.
+   - Test controller success and error paths.
+
+Run:
+python3 -m unittest discover -s tests -q
+</YOUR_TASK>
+
+<REITERATION>
+Remember: Task 2 MUST validate all numeric spacecraft inputs before saving state. The model must never store invalid spacecraft parameters. Do not break Task 1 catalog loading or Task 3 collision analysis.
+</REITERATION>
+
+
+
+Task 3 Prompt — Execute Collision Risk Analysis
+
+
+
+<CRITICAL_REQUIREMENT>
+You are an expert Python developer. Implement Task 3 fully and safely.
+The code MUST handle edge cases for missing catalog, empty catalog, missing spacecraft state, missing analysis configuration, invalid time windows, zero relative velocity, negative time windows, invalid time step, NaN, infinity, and propagation errors.
+Do NOT use high-fidelity orbital mechanics; use the required constant-velocity approximation.
+</CRITICAL_REQUIREMENT>
+
+<CONTEXT>
+Project: Space Debris Tracking and Collision Risk Dashboard.
+
+Task 3 Requirements:
+- FR-3.1: Simulate constant-velocity motion.
+- FR-3.2: Compute time of closest approach.
+- FR-3.3: Compute minimum separation distance.
+- FR-3.4: Compute relative velocity at encounter.
+- FR-3.5: Compute transparent severity risk score.
+- FR-3.6: Rank debris objects by severity.
+- FR-3.7: Provide interface for initiating and retrieving analysis results.
+
+Existing architecture:
+- DebrisTrackingModel owns catalog, spacecraft, analysis_config, and last_results.
+- ConstantVelocityPropagator propagates position.
+- EncounterAnalyzer computes encounter metrics.
+- RiskScoreCalculator computes risk score.
+- DashboardController handles run analysis.
+- DashboardView refreshes alert table and timeline.
+</CONTEXT>
+
+<YOUR_TASK>
+Implement Task 3 across the project.
+
+Required implementation:
+1. ConstantVelocityPropagator.propagate(position, velocity, delta_t_seconds)
+   - Reject negative delta_t_seconds.
+   - Reject non-finite inputs.
+   - Return Vector3(position + velocity * delta_t).
+
+2. EncounterAnalyzer.analyze(debris, spacecraft, config)
+   - Parse ISO 8601 start and end times.
+   - Reject end before start.
+   - Compute relative position r = debris.position - spacecraft.position.
+   - Compute relative velocity v = debris.velocity - spacecraft.velocity.
+   - Compute TCA using:
+     tca = -(r dot v) / |v|^2
+   - If relative speed is zero, use tca = 0.
+   - Clamp TCA to analysis window.
+   - Propagate debris and spacecraft to TCA.
+   - Compute minimum separation.
+   - Compute relative velocity magnitude.
+   - Return EncounterResult.
+
+3. RiskScoreCalculator.compute_score(metrics)
+   - Use a transparent, bounded score.
+   - Score should increase for smaller separation and higher relative velocity.
+   - Clamp final score between 0 and 1.
+
+4. DebrisTrackingModel.set_analysis_configuration(config)
+   - Validate positive time_step_seconds.
+   - Store config.
+
+5. DebrisTrackingModel.run_collision_analysis()
+   - Reject missing spacecraft state.
+   - Reject missing analysis configuration.
+   - Reject empty catalog.
+   - Analyze each debris object.
+   - Compute risk score for each result.
+   - Sort results by risk_score descending.
+   - Assign rank starting at 1.
+   - Store last_results.
+   - Fire AnalysisCompletedEvent.
+
+6. DashboardController.handle_run_analysis()
+   - Call model.run_collision_analysis.
+   - Catch AnalysisException and display error.
+
+7. Model event handling
+   - When analysis_completed fires, refresh alert table and timeline.
+
+8. Tests
+   - Known collision case:
+     debris starts 100m ahead and closes at 2m/s; TCA should be 50 seconds and separation 0.
+   - Ranking test with high-risk and low-risk objects.
+   - Missing spacecraft raises AnalysisException.
+   - Missing config raises AnalysisException.
+   - Empty catalog raises AnalysisException.
+   - Zero relative velocity works.
+   - TCA before window clamps to start.
+   - TCA after window clamps to end.
+   - Negative time window raises AnalysisException.
+
+Run:
+python3 -m unittest discover -s tests -q
+</YOUR_TASK>
+
+<REITERATION>
+Remember: Task 3 MUST use constant-velocity motion, compute TCA correctly, clamp TCA to the analysis window, rank results by risk score, and handle all missing or invalid inputs safely.
+</REITERATION>
+
+
+
+Task 4 Prompt — Visualize Results
+
+
+
+<CRITICAL_REQUIREMENT>
+You are an expert Python developer. Implement Task 4 fully and safely.
+The code MUST handle edge cases for empty results, missing analysis data, invalid export paths, empty export paths, unsupported sort keys, and visualization requests before analysis has run.
+Do NOT mix visualization logic into collision-analysis math.
+</CRITICAL_REQUIREMENT>
+
+<CONTEXT>
+Project: Space Debris Tracking and Collision Risk Dashboard.
+
+Task 4 Requirements:
+- FR-4.1: Display sortable alert table.
+- FR-4.2: Display timeline of close approaches.
+- FR-4.3: Display distance-versus-time plots.
+- FR-4.4: Display 2D encounter geometry visualizations.
+- FR-4.5: Allow export of analysis results as CSV.
+
+Existing architecture:
+- DebrisTrackingModel stores ranked EncounterResult objects in last_results.
+- DashboardController handles export and model events.
+- DashboardView refreshes alert table, timeline, distance plots, and geometry.
+- ResultExporter exports CSV.
+</CONTEXT>
+
+<YOUR_TASK>
+Implement Task 4 across the project.
+
+Required implementation:
+1. DashboardView.refresh_alert_table(rows)
+   - Display ranked results.
+   - Include rank, debris_id, risk_score, minimum separation, TCA, and relative velocity.
+   - Handle empty list gracefully.
+
+2. Sortable alert table support
+   - Add helper method to sort results by:
+     - rank
+     - risk_score
+     - minimum_separation_meters
+     - time_of_closest_approach_iso8601
+     - relative_velocity_meters_per_second
+   - Reject unsupported sort keys clearly.
+
+3. DashboardView.refresh_timeline(events)
+   - Display close approaches ordered chronologically.
+   - Handle empty events gracefully.
+
+4. Distance plot data generation
+   - Add service or view-model helper that samples separation over time for top-ranked objects.
+   - Use constant-velocity propagation.
+   - Handle empty results or missing state gracefully.
+
+5. Encounter geometry view model
+   - Generate 2D XY geometry for spacecraft and debris at closest approach.
+   - Include spacecraft position, debris position, debris ID, and TCA.
+   - Handle missing results gracefully.
+
+6. ResultExporter.export_csv(path, results)
+   - Reject empty path.
+   - Reject empty results.
+   - Write headers:
+     debris_id, minimum_separation_meters, time_of_closest_approach_iso8601, relative_velocity_mps, risk_score, rank
+   - Raise AnalysisException on write failure.
+
+7. DashboardController.handle_export_csv(path)
+   - Call model.export_results_csv.
+   - Catch AnalysisException and display error.
+
+8. Tests
+   - Alert table handles empty results.
+   - Sorting by valid keys works.
+   - Unsupported sort key raises clear exception.
+   - Timeline orders by TCA.
+   - Export writes expected CSV headers and rows.
+   - Empty export path raises AnalysisException.
+   - Export before analysis raises AnalysisException.
+   - Visualization helpers handle empty results safely.
+
+Run:
+python3 -m unittest discover -s tests -q
+</YOUR_TASK>
+
+<REITERATION>
+Remember: Task 4 MUST present results clearly, handle empty or missing analysis outputs gracefully, support CSV export safely, and keep visualization/presentation separate from model analysis logic.
+</REITERATION>
+
+
+
+
+All-Tasks Prompt — Full Project Implementation
+<CRITICAL_REQUIREMENT>
+You are an expert Python developer. Implement the complete Space Debris Tracking and Collision Risk Dashboard using the existing MVC architecture.
+The code MUST handle edge cases for empty inputs, malformed CSV files, missing model state, invalid numeric values, NaN, infinity, bad time windows, empty results, and file export failures.
+Do NOT collapse model, view, and controller responsibilities together.
+</CRITICAL_REQUIREMENT>
+
+<CONTEXT>
+Project Requirements:
+
+Task 1: Upload or Generate Debris Catalog
+- Accept CSV debris catalogs.
+- Validate schema and data types.
+- Generate synthetic debris objects.
+- Display object count.
+
+Task 2: Define Spacecraft Parameters
+- Input position vector x,y,z.
+- Input velocity vector vx,vy,vz.
+- Define safety radius.
+- Validate numeric inputs.
+
+Task 3: Execute Collision Risk Analysis
+- Simulate constant-velocity motion.
+- Compute TCA.
+- Compute minimum separation.
+- Compute relative velocity.
+- Compute severity risk score.
+- Rank debris by severity.
+- Provide interface to run and retrieve analysis.
+
+Task 4: Visualize Results
+- Display sortable alert table.
+- Display close-approach timeline.
+- Display distance-versus-time plots.
+- Display 2D encounter geometry.
+- Export results as CSV.
+
+Existing architecture:
+- model/entities.py contains domain objects.
+- model/services.py contains loaders, validators, analyzers, propagators, scorers, and exporters.
+- model/debris_tracking_model.py orchestrates state and analysis.
+- controller/dashboard_controller.py coordinates user actions.
+- view/dashboard_view.py displays outputs.
+- tests/ contains unit tests.
+</CONTEXT>
+
+<YOUR_TASK>
+Implement the full project according to the requirements.
+
+Required priorities:
+1. Preserve MVC separation.
+2. Keep service classes focused.
+3. Validate all inputs before storing state.
+4. Use clear custom exceptions.
+5. Ensure all analysis results are repeatable.
+6. Use constant-velocity approximation only.
+7. Add comprehensive unit tests.
+8. Run full test suite.
+
+Testing requirements:
+- CSV loading valid/invalid cases.
+- Synthetic catalog generation valid/invalid cases.
+- Spacecraft input validation.
+- Analysis configuration validation.
+- TCA and separation correctness.
+- Risk ranking correctness.
+- Controller success/error paths.
+- CSV export.
+- Empty and missing state edge cases.
+
+Run:
+python3 -m unittest discover -s tests -q
+
+After implementation, provide:
+- Files changed.
+- Tests added.
+- Final test output.
+- Any assumptions made.
+</YOUR_TASK>
+
+<REITERATION>
+Remember: The system MUST be robust. Empty inputs, invalid numbers, malformed files, missing state, invalid time windows, empty results, and export failures must be handled with clear exceptions or error messages. Preserve MVC separation and do not break existing functionality.
+</REITERATION>
